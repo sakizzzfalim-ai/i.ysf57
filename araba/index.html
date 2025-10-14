@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Araba Oyunu</title>
+  <!-- Three.js kütüphanesi (CDN üzerinden) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    body, html {
+      margin: 0; padding: 0; overflow: hidden;
+      background-color: #87CEEB; /* Açık mavi gökyüzü rengi */
+    }
+    /* Oyun bitti mesajı */
+    #gameOver {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8); color: white;
+      padding: 20px; border-radius: 5px;
+      display: none; text-align: center;
+      font-size: 20px;
+    }
+    #restartBtn {
+      margin-top: 10px; padding: 10px 20px;
+      background: #ff4444; color: white;
+      border: none; cursor: pointer; border-radius: 5px;
+    }
+    /* Mobil kontrol butonları */
+    .control-buttons {
+      position: fixed; bottom: 10%; width: 100%;
+      display: flex; justify-content: center; gap: 1cm;
+    }
+    .control-btn {
+      width: 60px; height: 60px;
+      background-color: #0000FF; color: white;
+      font-size: 20px; border: none; border-radius: 50%;
+      cursor: pointer; opacity: 0.9;
+    }
+    /* Skor gösterimi */
+    #scoreContainer {
+      position: absolute; top: 10px; left: 10px;
+      background-color: #87CEEB; padding: 10px; border-radius: 5px;
+    }
+    #score {
+      font-size: 48px; color: white;
+      background-color: #87CEEB; padding: 10px; border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Skor göstergesi -->
+  <div id="scoreContainer"><div id="score">Skor: 0</div></div>
+
+  <!-- Oyun Bitti ekranı -->
+  <div id="gameOver">
+    Oyun Bitti!<br>
+    <button id="restartBtn">Yeniden Başlat</button>
+  </div>
+
+  <!-- Sol/Sağ mobil kontrol butonları -->
+  <div class="control-buttons">
+    <button id="leftBtn" class="control-btn">←</button>
+    <button id="rightBtn" class="control-btn">→</button>
+  </div>
+
+  <script>
+    let scene, camera, renderer;
+    let car, obstacles = [];
+    let gameOver = false;
+    let obstacleSpeed = 0.05;
+    let score = 0;
+
+    // Sahne ve kamera kurulumu
+    function init() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(
+        75, window.innerWidth/window.innerHeight, 0.1, 1000
+      );
+      camera.position.z = 5;
+
+      // Renderer oluşturup sayfaya ekle
+      renderer = new THREE.WebGLRenderer();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      // Yol (zemin) oluşturuluyor
+      const roadGeometry = new THREE.PlaneGeometry(10, 50);
+      const roadMaterial = new THREE.MeshBasicMaterial({ color: 0x606060 });
+      const road = new THREE.Mesh(roadGeometry, roadMaterial);
+      road.rotation.x = -Math.PI / 2;
+      road.position.y = -0.5;
+      scene.add(road);
+
+      // Araba oluşturuluyor (kırmızı kutu)
+      const carGeometry = new THREE.BoxGeometry(0.5, 0.5, 1);
+      const carMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+      car = new THREE.Mesh(carGeometry, carMaterial);
+      car.position.y = 0.25;
+      scene.add(car);
+
+      // Başlangıç engelleri ekleniyor
+      for (let i = 0; i < 5; i++) addObstacle();
+
+      // Butonlar için dinleyiciler (tıklama)
+      document.getElementById('leftBtn').addEventListener('click', moveCarLeft);
+      document.getElementById('rightBtn').addEventListener('click', moveCarRight);
+      document.getElementById('restartBtn').addEventListener('click', restartGame);
+
+      // Klavye ok tuşları
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft') moveCarLeft();
+        else if (e.key === 'ArrowRight') moveCarRight();
+      });
+
+      animate(); // Oyun döngüsünü başlat
+    }
+
+    // Arabayı sola hareket ettir
+    function moveCarLeft() {
+      if (car.position.x > -3) car.position.x -= 0.5;
+    }
+    // Arabayı sağa hareket ettir
+    function moveCarRight() {
+      if (car.position.x < 3) car.position.x += 0.5;
+    }
+
+    // Yeni bir engel oluştur ve sahneye ekle
+    function addObstacle() {
+      const obstacleGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+      const obstacleMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+      const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+      obstacle.position.set(
+        (Math.random()-0.5) * 6, 0.25,
+        -10 - Math.random()*10
+      );
+
+      // Engel için tekerlekler ekle
+      const wheelGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.2, 16);
+      const wheelMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+      const w1 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+      const w2 = w1.clone(), w3 = w1.clone(), w4 = w1.clone();
+      w1.position.set(-0.25, -0.25, 0.25);
+      w2.position.set( 0.25, -0.25, 0.25);
+      w3.position.set(-0.25, -0.25,-0.25);
+      w4.position.set( 0.25, -0.25,-0.25);
+      obstacle.add(w1, w2, w3, w4);
+
+      obstacles.push(obstacle);
+      scene.add(obstacle);
+    }
+
+    // Animasyon döngüsü
+    function animate() {
+      if (gameOver) return; 
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+
+      // Engelleri hareket ettir ve çarpışma kontrolü yap
+      obstacles.forEach(obstacle => {
+        obstacle.position.z += obstacleSpeed;
+        // Çarpışma kontrolü
+        if (obstacle.position.z > 0 && Math.abs(obstacle.position.x - car.position.x) < 0.5) {
+          endGame();
+        }
+        // Ekranın dışına çıkan engeli sıfırla
+        if (obstacle.position.z > 5) {
+          obstacle.position.z = -10 - Math.random()*10;
+          obstacle.position.x = (Math.random()-0.5)*6;
+          // Skoru artır
+          score += 100;
+        }
+      });
+
+      // Engel hızı kademeli artar
+      obstacleSpeed += 0.00001;
+      // Skoru ekranda güncelle
+      document.getElementById('score').innerText = `Skor: ${score}`;
+    }
+
+    // Oyun bittiğinde
+    function endGame() {
+      gameOver = true;
+      document.getElementById('gameOver').style.display = 'block';
+    }
+
+    // Oyunu yeniden başlat
+    function restartGame() {
+      gameOver = false;
+      document.getElementById('gameOver').style.display = 'none';
+      car.position.set(0, 0.25, 0);
+      obstacles.forEach(ob => scene.remove(ob));
+      obstacles = [];
+      score = 0;
+      for (let i = 0; i < 5; i++) addObstacle();
+      obstacleSpeed = 0.05;
+      animate();
+    }
+
+    // Pencere boyutu değişince kamerayı güncelle
+    window.addEventListener('resize', () => {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+    });
+
+    // Oyunu başlat
+    init();
+  </script>
+
+</body>
+</html>
